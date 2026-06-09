@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>저온 콜드체인 배송 시뮬레이션 | 냉장 스트레스 유전자 발현 분석</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #04060d;
+            --bg-card: #0b1120;
+            --bg-panel: #0e1829;
+            --border: rgba(56, 189, 248, 0.15);
+            --accent-blue: #38bdf8;
+            --accent-cyan: #06b6d4;
+            --accent-cold: #a5f3fc;
+            --accent-warm: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-green: #22c55e;
+            --accent-purple: #a78bfa;
+            --text-main: #e2e8f0;
+            --text-muted: #64748b;
+            --cold-glow: rgba(56, 189, 248, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Animated background grid ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        /* ── Header ── */
+        header {
+            background: linear-gradient(135deg, #0b1729 0%, #071228 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px 28px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            top: -40px;
+            right: -60px;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .header-left h1 {
+            font-size: 1.45rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-left p {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        /* ── KPI bar ── */
+        .kpi-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .kpi {
+            flex: 1;
+            min-width: 130px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kpi-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .kpi-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .kpi-value.warn {
+            color: var(--accent-warm);
+        }
+
+        .kpi-value.danger {
+            color: var(--accent-red);
+        }
+
+        .kpi-value.ok {
+            color: var(--accent-green);
+        }
+
+        .kpi-sub {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Main grid ── */
+        .main-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 14px;
+            align-items: start;
+        }
+
+        /* ── Map panel ── */
+        .map-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            padding: 10px 16px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent-blue);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            box-shadow: 0 0 8px var(--accent-blue);
+            animation: pulse-dot 1.4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(0.7);
+            }
+        }
+
+        #map-svg-wrap {
+            flex: 1;
+            position: relative;
+            background: #0a121e;
+        }
+
+        #simulationMap {
+            width: 100%;
+            height: 480px;
+            display: block;
+        }
+
+        .map-text {
+            paint-order: stroke fill;
+            stroke: #060e1a;
+            stroke-width: 5px;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            font-weight: 800;
+        }
+
+        /* ── Control bar ── */
+        .control-bar {
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.8rem;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 22px;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.03em;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #475569, #334155);
+            color: #fff;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .speed-control label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .speed-control input[type=range] {
+            width: 90px;
+            accent-color: var(--accent-blue);
+        }
+
+        #speedMult {
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--accent-cold);
+        }
+
+        /* ── Right side panel ── */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Phase panel */
+        .phase-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .phase-timeline {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .phase-item {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            position: relative;
+            padding-bottom: 16px;
+        }
+
+        .phase-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .phase-item:last-child .phase-line {
+            display: none;
+        }
+
+        .phase-icon-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .phase-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            border: 2px solid;
+            transition: all 0.4s;
+        }
+
+        .phase-line {
+            position: absolute;
+            left: 17px;
+            top: 34px;
+            width: 2px;
+            height: calc(100% - 18px);
+            background: var(--border);
+            transition: background 0.4s;
+        }
+
+        .phase-icon.idle {
+            border-color: var(--text-muted);
+            background: #1a2540;
+        }
+
+        .phase-icon.active {
+            border-color: var(--accent-blue);
+            background: rgba(56, 189, 248, 0.15);
+            box-shadow: 0 0 14px var(--cold-glow);
+        }
+
+        .phase-icon.done {
+            border-color: var(--accent-green);
+            background: rgba(34, 197, 94, 0.12);
+        }
+
+        .phase-line.active {
+            background: linear-gradient(to bottom, var(--accent-blue), var(--border));
+        }
+
+        .phase-line.done {
+            background: var(--accent-green);
+        }
+
+        .phase-info {
+            flex: 1;
+        }
+
+        .phase-name {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .phase-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .phase-badge {
+            display: inline-block;
+            font-size: 0.62rem;
+            padding: 1px 7px;
+            border-radius: 20px;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .badge-idle {
+            background: rgba(100, 116, 139, 0.2);
+            color: var(--text-muted);
+        }
+
+        .badge-active {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .badge-done {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--accent-green);
+        }
+
+        /* Temp gauge */
+        .temp-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+        }
+
+        .temp-gauge-wrap {
+            position: relative;
+            width: 100%;
+            height: 14px;
+            background: #111c2e;
+            border-radius: 7px;
+            overflow: hidden;
+            margin: 8px 0 4px;
+        }
+
+        .temp-gauge-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            border-radius: 7px;
+            transition: width 0.8s ease, background 0.8s ease;
+        }
+
+        .temp-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.62rem;
+            color: var(--text-muted);
+        }
+
+        /* Gene expression panel */
+        .gene-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            flex: none;
+            order: -1;
+        }
+
+        .gene-flowchart {
+            padding: 10px;
+            position: relative;
+        }
+
+        .pathway-canvas {
+            position: relative;
+            height: 500px;
+            min-height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% 8%, rgba(56, 189, 248, 0.16), transparent 28%),
+                radial-gradient(circle at 24% 56%, rgba(167, 139, 250, 0.10), transparent 30%),
+                radial-gradient(circle at 76% 56%, rgba(34, 197, 94, 0.10), transparent 30%),
+                #08111f;
+            border: 1px solid rgba(56, 189, 248, 0.16);
+        }
+
+        .pathway-links {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .pathway-link {
+            fill: none;
+            stroke: rgba(100, 116, 139, 0.45);
+            stroke-width: 0.65;
+            stroke-linecap: round;
+            stroke-dasharray: 1.4 1.15;
+            transition: stroke 0.5s, filter 0.5s, opacity 0.5s;
+        }
+
+        .pathway-link.active {
+            stroke: rgb(var(--line-rgb));
+            opacity: 0.95;
+            filter: drop-shadow(0 0 2px rgba(var(--line-rgb), 0.75));
+            stroke-dasharray: none;
+        }
+
+        .pathway-stress {
+            position: absolute;
+            left: 50%;
+            top: 8px;
+            transform: translateX(-50%);
+            width: 132px;
+            min-height: 56px;
+            padding: 10px 12px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            font-weight: 900;
+            color: #08111f;
+            background: #f8fafc;
+            border: 2px solid #38bdf8;
+            clip-path: polygon(50% 0%, 58% 17%, 76% 8%, 72% 29%, 94% 32%, 78% 47%, 100% 62%, 75% 64%, 84% 88%, 62% 76%, 50% 100%, 38% 76%, 16% 88%, 25% 64%, 0% 62%, 22% 47%, 6% 32%, 28% 29%, 24% 8%, 42% 17%);
+            filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.45));
+            z-index: 3;
+        }
+
+        .pathway-stress span {
+            display: block;
+            margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.52rem;
+            color: #0f766e;
+        }
+
+        .gene-node {
+            position: absolute;
+            left: var(--x);
+            top: var(--y);
+            width: min(34%, 160px);
+            min-height: 104px;
+            transform: translate(-50%, -50%);
+            border-radius: 9px;
+            border: 1.4px solid rgba(100, 116, 139, 0.42);
+            padding: 8px;
+            --level: 0%;
+            --gene-rgb: 56, 189, 248;
+            --glow-alpha: 0;
+            background: rgba(11, 17, 32, 0.86);
+            transition: border-color 0.5s, box-shadow 0.5s, transform 0.5s, background 0.5s;
+            z-index: 2;
+        }
+
+        .gene-node::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 90% 12%, rgba(var(--gene-rgb), var(--glow-alpha)), transparent 38%),
+                linear-gradient(90deg, rgba(var(--gene-rgb), 0.22) 0%, rgba(var(--gene-rgb), 0.10) var(--level), transparent var(--level));
+            pointer-events: none;
+            transition: opacity 0.5s, background 0.5s;
+            border-radius: inherit;
+        }
+
+        .gene-node>* {
+            position: relative;
+            z-index: 1;
+        }
+
+        .gene-node.idle {
+            border-color: rgba(100, 116, 139, 0.3);
+            background: rgba(13, 24, 38, 0.78);
+        }
+
+        .gene-node.idle::before {
+            opacity: 0.10;
+        }
+
+        .gene-node.active {
+            border-color: rgba(var(--gene-rgb), 0.85);
+            background: rgba(8, 22, 35, 0.92);
+            box-shadow: 0 0 0 1px rgba(var(--gene-rgb), 0.16), 0 0 18px rgba(var(--gene-rgb), 0.20);
+        }
+
+        .gene-node.expressed {
+            border-color: rgba(var(--gene-rgb), 0.95);
+            background: rgba(7, 24, 35, 0.96);
+            box-shadow: 0 0 0 1px rgba(var(--gene-rgb), 0.24), 0 0 24px rgba(var(--gene-rgb), 0.30);
+        }
+
+        .gene-node.suppressed {
+            border-color: rgba(245, 158, 11, 0.95);
+            background: rgba(30, 20, 8, 0.95);
+            box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.20), 0 0 20px rgba(245, 158, 11, 0.26);
+        }
+
+        .gene-node.late {
+            border-color: var(--accent-red);
+            background: #1e0d12;
+            box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.24), 0 0 26px rgba(239, 68, 68, 0.34);
+        }
+
+        .gene-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 7px;
+        }
+
+        .gene-main {
+            min-width: 0;
+        }
+
+        .gene-title {
+            font-size: 0.68rem;
+            font-weight: 900;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .gene-sub {
+            font-size: 0.53rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            line-height: 1.18;
+            overflow-wrap: anywhere;
+        }
+
+        .gene-desc {
+            font-size: 0.53rem;
+            color: #8aa0b9;
+            margin-top: 5px;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .gene-level-ring {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: conic-gradient(rgb(var(--gene-rgb)) var(--level), rgba(100, 116, 139, 0.22) 0);
+            box-shadow: 0 0 14px rgba(var(--gene-rgb), var(--glow-alpha));
+        }
+
+        .gene-level {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #08111f;
+            color: #f8fafc;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.54rem;
+            font-weight: 800;
+        }
+
+        .gene-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 6px;
+        }
+
+        .gene-chip {
+            display: inline-flex;
+            align-items: center;
+            height: 17px;
+            border-radius: 999px;
+            padding: 0 6px;
+            background: rgba(var(--gene-rgb), 0.13);
+            border: 1px solid rgba(var(--gene-rgb), 0.26);
+            color: #dbeafe;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .gene-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+            margin-top: 6px;
+            color: #94a3b8;
+            font-size: 0.5rem;
+            line-height: 1.15;
+        }
+
+        .gene-bar-wrap {
+            height: 8px;
+            background: #08111f;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 999px;
+            margin-top: 7px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .gene-bar-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-linear-gradient(90deg, transparent 0 18%, rgba(226, 232, 240, 0.14) 18% 19%, transparent 19% 20%);
+            pointer-events: none;
+        }
+
+        .gene-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            width: 0%;
+            background: linear-gradient(90deg, rgba(var(--gene-rgb), 0.55), rgb(var(--gene-rgb)));
+            box-shadow: 0 0 14px rgba(var(--gene-rgb), 0.55);
+            transition: width 0.85s ease;
+        }
+
+        .gene-node.expressed .gene-bar-fill,
+        .gene-node.suppressed .gene-bar-fill,
+        .gene-node.late .gene-bar-fill {
+            animation: gene-surge 1.2s ease-in-out infinite;
+        }
+
+        @keyframes gene-surge {
+
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.35);
+            }
+        }
+
+        .pathway-gate {
+            position: absolute;
+            left: 50%;
+            top: 46%;
+            width: 86%;
+            height: 56%;
+            transform: translate(-50%, -50%);
+            border: 1px dashed rgba(226, 232, 240, 0.28);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .pathway-gate-label {
+            position: absolute;
+            left: 50%;
+            top: 25%;
+            transform: translateX(-50%);
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(8, 17, 31, 0.86);
+            color: #cbd5e1;
+            font-size: 0.52rem;
+            font-weight: 700;
+            z-index: 2;
+        }
+
+        .pathway-output {
+            position: absolute;
+            left: 50%;
+            bottom: 10px;
+            transform: translateX(-50%);
+            width: 84%;
+            min-height: 56px;
+            border-radius: 9px;
+            padding: 9px 12px;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1.5px solid rgba(34, 197, 94, 0.65);
+            box-shadow: 0 0 18px rgba(34, 197, 94, 0.20);
+            text-align: center;
+            z-index: 2;
+        }
+
+        .pathway-output strong {
+            display: block;
+            color: #bbf7d0;
+            font-size: 0.78rem;
+            line-height: 1.2;
+        }
+
+        .pathway-output span {
+            display: block;
+            margin-top: 4px;
+            color: #94a3b8;
+            font-size: 0.58rem;
+            line-height: 1.25;
+        }
+
+        .pathway-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            color: #94a3b8;
+            font-size: 0.55rem;
+        }
+
+        .pathway-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .legend-swatch {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--swatch);
+        }
+
+        /* Cargo log */
+        .cargo-log {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            margin-top: 14px;
+        }
+
+        .log-list {
+            margin-top: 8px;
+            max-height: 140px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .log-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .log-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .log-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            font-size: 0.7rem;
+            animation: log-fade 0.4s ease;
+        }
+
+        @keyframes log-fade {
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .log-time {
+            font-family: monospace;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .log-msg {
+            color: var(--text-main);
+        }
+
+        .log-msg.cold {
+            color: var(--accent-cold);
+        }
+
+        .log-msg.warn {
+            color: var(--accent-warm);
+        }
+
+        .log-msg.danger {
+            color: var(--accent-red);
+        }
+
+        .log-msg.ok {
+            color: var(--accent-green);
+        }
+
+        /* Snowflake floaters */
+        .flake {
+            position: fixed;
+            top: -10px;
+            font-size: 14px;
+            color: rgba(165, 243, 252, 0.15);
+            animation: fall linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(110vh) rotate(720deg);
+            }
+        }
+
+        /* Last mile overlay tag */
+        .lm-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(167, 139, 250, 0.15);
+            border: 1px solid rgba(167, 139, 250, 0.4);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 0.65rem;
+            color: var(--accent-purple);
+            font-weight: 700;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .right-panel {
+                flex-direction: column;
+                flex-wrap: nowrap;
+            }
+
+            .phase-panel,
+            .temp-panel,
+            .gene-panel {
+                flex: none;
+            }
+
+            .pathway-canvas {
+                height: 560px;
+                min-height: 560px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Snowflake decorations -->
+    <div id="flakes"></div>
+
+    <div class="wrapper">
+
+        <!-- ── Header ── -->
+        <header>
+            <div class="header-left">
+                <h1>❄️ 저온 콜드체인 배송 시뮬레이션</h1>
+                <p>적재 → 라스트 마일 배송 · 저온 스트레스 유전자 발현 실시간 분석 | 수도권 제1순환고속도로</p>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                <span class="lm-badge">🧬 유전자 발현 추적</span>
+                <span class="lm-badge">🚚 라스트 마일</span>
+                <span class="lm-badge">🌡️ 온도 모니터링</span>
+            </div>
+        </header>
+
+        <!-- ── KPI bar ── -->
+        <div class="kpi-bar">
+            <div class="kpi">
+                <span class="kpi-label">차량 상태</span>
+                <span class="kpi-value" id="kpiStatus" style="font-size:0.95rem;font-family:Outfit;">대기 중</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-label">주행 속도</span>
+                <span class="kpi-value" id="kpiSpeed">0</span>
+                <span class="kpi-sub">km/h</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-label">소요 시간</span>
+                <span class="kpi-value" id="kpiTime">00:00</span>
+                <span class="kpi-sub">mm:ss</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-label">화물 온도</span>
+                <span class="kpi-value" id="kpiTemp">-18.0</span>
+                <span class="kpi-sub">°C (냉동)</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-label">진행률</span>
+                <span class="kpi-value" id="kpiProgress">0</span>
+                <span class="kpi-sub">%</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-label">유전자 활성도</span>
+                <span class="kpi-value ok" id="kpiGene">0</span>
+                <span class="kpi-sub">발현 단계</span>
+            </div>
+        </div>
+
+        <!-- ── Main grid ── -->
+        <div class="main-grid">
+
+            <!-- ── MAP ── -->
+            <div style="display:flex;flex-direction:column;gap:14px;">
+                <div class="map-panel">
+                    <div class="panel-title">
+                        <div class="dot"></div>
+                        실시간 배송 경로 추적 — 별내 IC → 구리 TG → 남구리 IC → 라스트 마일
+                    </div>
+                    <div id="map-svg-wrap">
+                        <svg id="simulationMap" viewBox="0 0 1100 480" preserveAspectRatio="xMidYMid slice">
+
+                            <!-- Background -->
+                            <rect width="1100" height="480" fill="#0a121e" />
+
+                            <!-- Grid subtle -->
+                            <defs>
+                                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(56,189,248,0.04)"
+                                        stroke-width="1" />
+                                </pattern>
+                                <filter id="glow-blue">
+                                    <feGaussianBlur stdDeviation="3" result="blur" />
+                                    <feMerge>
+                                        <feMergeNode in="blur" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                                <filter id="glow-green">
+                                    <feGaussianBlur stdDeviation="4" result="blur" />
+                                    <feMerge>
+                                        <feMergeNode in="blur" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                                <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="4" refY="4"
+                                    orient="auto">
+                                    <path d="M0,0 L8,4 L0,8 Z" fill="#38bdf8" opacity="0.7" />
+                                </marker>
+                            </defs>
+                            <rect width="1100" height="480" fill="url(#grid)" />
+
+                            <!-- Terrain / greenery -->
+                            <path d="M-50 0 Q 120 80 130 250 Q 120 420 -50 480 Z" fill="#0d2217" opacity="0.9" />
+                            <path d="M 750 -20 C 850 100 820 280 950 380 C 1050 460 1150 480 1150 -20 Z" fill="#0d2217"
+                                opacity="0.9" />
+
+                            <!-- Water: Hangang -->
+                            <path d="M 0 400 Q 400 430 1100 390 L 1100 480 L 0 480 Z" fill="#0a2540" opacity="0.95" />
+                            <path d="M 0 415 Q 400 445 1100 405" fill="none" stroke="#0ea5e9" stroke-width="1"
+                                opacity="0.3" />
+
+                            <!-- Water: Wangsukcheon -->
+                            <path
+                                d="M 570 -20 Q 570 150 565 280 Q 558 360 680 410 L 710 415 Q 595 368 603 280 Q 610 150 620 -20 Z"
+                                fill="#0a2540" opacity="0.9" />
+
+                            <!-- Side roads -->
+                            <path d="M -50 240 Q 250 232 480 240 Q 680 248 1150 218" stroke="#1e2d40" stroke-width="14"
+                                fill="none" stroke-linecap="round" />
+                            <path d="M -50 240 Q 250 232 480 240 Q 680 248 1150 218" stroke="#243244" stroke-width="7"
+                                fill="none" stroke-linecap="round" />
+                            <path d="M -50 390 Q 350 420 1150 375" stroke="#1e2d40" stroke-width="11" fill="none"
+                                stroke-linecap="round" />
+                            <path d="M -50 390 Q 350 420 1150 375" stroke="#243244" stroke-width="5" fill="none"
+                                stroke-linecap="round" />
+                            <path d="M 200 -20 Q 230 130 215 430" stroke="#1e2d40" stroke-width="10" fill="none"
+                                stroke-linecap="round" />
+                            <path d="M 200 -20 Q 230 130 215 430" stroke="#243244" stroke-width="5" fill="none"
+                                stroke-linecap="round" />
+
+                            <!-- Highway (Ring Road 100) — warm yellow -->
+                            <path id="highwayBg"
+                                d="M 300 30 C 370 30 400 70 400 130 L 400 290 C 400 360 340 400 490 460"
+                                stroke="#7c5c1a" stroke-width="28" fill="none" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path id="highwayFill"
+                                d="M 300 30 C 370 30 400 70 400 130 L 400 290 C 400 360 340 400 490 460"
+                                stroke="#f59e0b" stroke-width="20" fill="none" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M 300 30 C 370 30 400 70 400 130 L 400 290 C 400 360 340 400 490 460"
+                                stroke="#7c5c1a" stroke-width="2" stroke-dasharray="14 14" fill="none"
+                                stroke-linecap="round" />
+
+                            <!-- Highway badge 100 -->
+                            <g transform="translate(412,170)">
+                                <rect x="-16" y="-12" width="32" height="12" rx="3" fill="#1d4ed8" />
+                                <path d="M -16 0 L 16 0 L 16 8 C 16 16 0 22 0 22 C 0 22 -16 16 -16 8 Z"
+                                    fill="#ef4444" />
+                                <rect x="-16" y="-12" width="32" height="12" rx="3" fill="#1d4ed8" stroke="white"
+                                    stroke-width="1.5" />
+                                <text x="0" y="-2" fill="white" font-size="9" font-weight="bold" text-anchor="middle"
+                                    font-family="Arial">100</text>
+                            </g>
+
+                            <!-- Last mile road (branch after destination) -->
+                            <path id="lastMilePath" d="M 490 460 C 590 490 680 450 760 430 C 830 415 900 410 970 390"
+                                stroke="#374151" stroke-width="14" fill="none" stroke-linecap="round" opacity="0.7" />
+                            <path d="M 490 460 C 590 490 680 450 760 430 C 830 415 900 410 970 390" stroke="#4b5563"
+                                stroke-width="7" fill="none" stroke-linecap="round" opacity="0.7" />
+
+                            <!-- Route overlay (passed) -->
+                            <path id="passedRoute"
+                                d="M 300 30 C 370 30 400 70 400 130 L 400 290 C 400 360 340 400 490 460"
+                                stroke="#38bdf8" stroke-width="10" stroke-dasharray="0,9999" fill="none"
+                                stroke-linecap="round" stroke-linejoin="round" opacity="0.9" filter="url(#glow-blue)" />
+
+                            <!-- Last mile route overlay -->
+                            <path id="passedLastMile" d="M 490 460 C 590 490 680 450 760 430 C 830 415 900 410 970 390"
+                                stroke="#a78bfa" stroke-width="8" stroke-dasharray="0,9999" fill="none"
+                                stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+
+                            <!-- Logical paths (invisible, for JS) -->
+                            <path id="logicalRoute"
+                                d="M 300 30 C 370 30 400 70 400 130 L 400 290 C 400 360 340 400 490 460"
+                                stroke="transparent" stroke-width="1" fill="none" />
+                            <path id="logicalLastMile" d="M 490 460 C 590 490 680 450 760 430 C 830 415 900 410 970 390"
+                                stroke="transparent" stroke-width="1" fill="none" />
+
+                            <!-- Traffic / control layer -->
+                            <g id="traffic-lights-layer"></g>
+
+                            <!-- Waypoint markers -->
+                            <!-- START: 별내 IC -->
+                            <g transform="translate(300,30)">
+                                <circle cx="0" cy="0" r="12" fill="#0a121e" stroke="#38bdf8" stroke-width="3" />
+                                <circle cx="0" cy="0" r="5" fill="#38bdf8" />
+                                <text x="0" y="-18" fill="#a5f3fc" font-size="13" class="map-text" text-anchor="middle"
+                                    font-family="Outfit">별내 IC</text>
+                                <text x="0" y="-5" fill="#38bdf8" font-size="8" text-anchor="middle"
+                                    font-family="Outfit">출발</text>
+                            </g>
+                            <!-- TG: 구리 TG -->
+                            <g transform="translate(400,268)" id="tollGateMarker">
+                                <rect x="-38" y="-12" width="76" height="24" rx="5" fill="#1e2d40" stroke="#64748b"
+                                    stroke-width="1.5" />
+                                <line x1="-28" y1="12" x2="-28" y2="22" stroke="#475569" stroke-width="4" />
+                                <line x1="28" y1="12" x2="28" y2="22" stroke="#475569" stroke-width="4" />
+                                <text x="0" y="5" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle"
+                                    font-family="Outfit">구리 TG</text>
+                            </g>
+                            <!-- Loading point (하역) -->
+                            <g transform="translate(400,130)" id="loadingMarker">
+                                <rect x="-30" y="-14" width="60" height="28" rx="6" fill="rgba(34,197,94,0.15)"
+                                    stroke="#22c55e" stroke-width="1.5" />
+                                <text x="0" y="5" fill="#22c55e" font-size="10" font-weight="bold" text-anchor="middle"
+                                    font-family="Outfit">📦 적재</text>
+                            </g>
+                            <!-- END: 남구리 IC -->
+                            <g transform="translate(490,460)">
+                                <circle cx="0" cy="0" r="13" fill="#0a121e" stroke="#ef4444" stroke-width="3" />
+                                <path d="M -5 -5 L 5 5 M 5 -5 L -5 5" stroke="#ef4444" stroke-width="3"
+                                    stroke-linecap="round" />
+                                <text x="0" y="-20" fill="#fca5a5" font-size="13" class="map-text" text-anchor="middle"
+                                    font-family="Outfit">남구리 IC</text>
+                            </g>
+                            <!-- Last mile delivery point -->
+                            <g transform="translate(970,390)" id="deliveryMarker">
+                                <circle cx="0" cy="0" r="14" fill="rgba(167,139,250,0.15)" stroke="#a78bfa"
+                                    stroke-width="2" />
+                                <text x="0" y="5" fill="#a78bfa" font-size="14" text-anchor="middle">🏠</text>
+                                <text x="0" y="-20" fill="#c4b5fd" font-size="11" class="map-text" text-anchor="middle"
+                                    font-family="Outfit">최종 배달</text>
+                            </g>
+
+                            <!-- Water labels -->
+                            <text x="640" y="250" fill="#38bdf8" font-size="13" class="map-text"
+                                opacity="0.6">왕숙천</text>
+                            <text x="700" y="455" fill="#38bdf8" font-size="17" class="map-text" opacity="0.6">한
+                                강</text>
+                            <text x="40" y="255" fill="#6b7280" font-size="12" class="map-text"
+                                opacity="0.6">북부간선도로</text>
+
+                            <!-- Truck -->
+                            <g id="truck" transform="translate(300,30) rotate(0)">
+                                <!-- Shadow -->
+                                <rect x="-26" y="-13" width="52" height="26" rx="5" fill="rgba(0,0,0,0.5)"
+                                    transform="translate(4,5)" />
+                                <!-- Cargo box -->
+                                <rect x="-26" y="-13" width="37" height="26" rx="3" fill="#1d4ed8" stroke="#3b82f6"
+                                    stroke-width="1.5" />
+                                <!-- Cold stripes -->
+                                <rect x="-22" y="-9" width="5" height="18" rx="1" fill="rgba(165,243,252,0.25)" />
+                                <rect x="-14" y="-9" width="5" height="18" rx="1" fill="rgba(165,243,252,0.15)" />
+                                <!-- Snowflake icon -->
+                                <text x="-9" y="5" font-size="10" text-anchor="middle"
+                                    fill="rgba(165,243,252,0.8)">❄</text>
+                                <!-- Cab -->
+                                <rect x="12" y="-11" width="14" height="22" rx="3" fill="#e2e8f0" stroke="#94a3b8"
+                                    stroke-width="1" />
+                                <rect x="15" y="-9" width="8" height="18" rx="2" fill="#38bdf8" opacity="0.8" />
+                                <!-- Headlight -->
+                                <circle cx="26" cy="0" r="3" fill="#fef08a" opacity="0.9" />
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="control-bar">
+                        <button class="btn btn-primary" id="startBtn">▶ 배송 시작</button>
+                        <button class="btn btn-pause" id="pauseBtn" disabled>⏸ 일시정지</button>
+                        <button class="btn btn-reset" id="resetBtn">↺ 초기화</button>
+                        <div class="speed-control">
+                            <label>배속</label>
+                            <input type="range" id="simSpeedSlider" min="1" max="8" value="2" step="0.5">
+                            <span id="speedMult">×2</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cargo log -->
+                <div class="cargo-log">
+                    <div class="panel-title"
+                        style="padding:0 0 8px 0; border-bottom:1px solid var(--border); margin-bottom:0;">
+                        <div class="dot"></div>
+                        배송 이벤트 로그
+                    </div>
+                    <div class="log-list" id="logList">
+                        <div class="log-entry">
+                            <span class="log-time">00:00</span>
+                            <span class="log-msg cold">시스템 초기화 완료. 냉동 화물 적재 준비 중...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── RIGHT PANEL ── -->
+            <div class="right-panel">
+
+                <!-- Phase timeline -->
+                <div class="phase-panel">
+                    <div class="panel-title">
+                        <div class="dot"></div>
+                        배송 단계
+                    </div>
+                    <div class="phase-timeline" id="phaseTimeline">
+                        <!-- JS rendered -->
+                    </div>
+                </div>
+
+                <!-- Temperature gauge -->
+                <div class="temp-panel">
+                    <div class="panel-title"
+                        style="padding:0 0 8px 0; border-bottom:1px solid var(--border); margin-bottom:10px;">
+                        <div class="dot"></div>
+                        화물 온도 모니터링
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:4px;">
+                        <span style="font-size:0.72rem;color:var(--text-muted);">현재 온도</span>
+                        <span id="tempDisplay"
+                            style="font-family:'JetBrains Mono';font-size:1.1rem;color:var(--accent-cold);">-18.0°C</span>
+                    </div>
+                    <div class="temp-gauge-wrap">
+                        <div class="temp-gauge-fill" id="tempGaugeFill"
+                            style="width:10%;background:linear-gradient(90deg,#0ea5e9,#38bdf8);"></div>
+                    </div>
+                    <div class="temp-scale">
+                        <span>-25°C</span><span>-15°C</span><span>-5°C</span><span>0°C</span><span>+5°C</span>
+                    </div>
+                    <!-- Mini chart -->
+                    <svg id="tempChart" viewBox="0 0 340 60" width="100%"
+                        style="margin-top:10px;border-radius:8px;background:#0a121e;overflow:visible;">
+                        <defs>
+                            <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5" />
+                                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+                            </linearGradient>
+                        </defs>
+                        <path id="tempChartArea" d="" fill="url(#tempGrad)" />
+                        <polyline id="tempChartLine" points="" fill="none" stroke="#38bdf8" stroke-width="1.5"
+                            stroke-linecap="round" />
+                        <text x="4" y="14" font-size="8" fill="#64748b" font-family="monospace">온도 추이 (°C)</text>
+                    </svg>
+                </div>
+
+                <!-- Gene expression flowchart -->
+                <div class="gene-panel">
+                    <div class="panel-title">
+                        <div class="dot"></div>
+                        E. coli 저온 스트레스 유전자 네트워크
+                    </div>
+                    <div class="gene-flowchart" id="geneFlowchart">
+                        <!-- JS rendered -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════
+        //  COLD CHAIN DELIVERY SIMULATION
+        //  과학전람회 수준 | 저온 스트레스 유전자 발현 연동
+        // ═══════════════════════════════════════════════════════
+
+        // ── Snowflakes ──
+        (function () {
+            const container = document.getElementById('flakes');
+            const symbols = ['❄', '❅', '❆', '*'];
+            for (let i = 0; i < 18; i++) {
+                const f = document.createElement('div');
+                f.className = 'flake';
+                f.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                f.style.left = Math.random() * 100 + 'vw';
+                f.style.fontSize = (10 + Math.random() * 16) + 'px';
+                f.style.animationDuration = (8 + Math.random() * 16) + 's';
+                f.style.animationDelay = (-Math.random() * 16) + 's';
+                f.style.opacity = 0.1 + Math.random() * 0.15;
+                container.appendChild(f);
+            }
+        })();
+
+        // ── Delivery Phases ──
+        const PHASES = [
+            { id: 'load', icon: '📦', name: '화물 적재', desc: '냉동 창고 → 냉장 트럭 적재·검수', color: '#22c55e' },
+            { id: 'depart', icon: '🚛', name: '고속도로 진입', desc: '별내 IC → 수도권 제1순환 진입', color: '#38bdf8' },
+            { id: 'highway', icon: '🛣️', name: '고속도로 주행', desc: '구리 TG 통과 · 속도 유지', color: '#38bdf8' },
+            { id: 'exit', icon: '🔄', name: 'IC 진출', desc: '남구리 IC 진출 → 일반 도로 진입', color: '#f59e0b' },
+            { id: 'lastmile', icon: '🏠', name: '라스트 마일', desc: '최종 목적지 배달 · 하역 완료', color: '#a78bfa' },
+        ];
+
+        // ── Gene Expression Nodes ──
+        const GENES = [
+            {
+                id: 'supercoil', title: 'DNA 꼬임 변화',
+                sub: 'Cold shock trigger · 전사 재배선',
+                color: '#38bdf8', triggerPhase: 'depart', x: 24, y: 20,
+                markers: ['supercoiling', 'pause'],
+                time: '0-15분',
+                desc: '저온 직후 DNA supercoiling 변화로 전사 스위치가 재조정됨'
+            },
+            {
+                id: 'rpos', title: 'DsrA-RpoS 경로',
+                sub: 'stress resistance · biofilm 보조',
+                color: '#06b6d4', triggerPhase: 'depart', x: 76, y: 20,
+                markers: ['DsrA', 'RpoS'],
+                time: '초기',
+                desc: 'DsrA sRNA가 RpoS mRNA 안정성을 높여 저온 스트레스 방어를 유도'
+            },
+            {
+                id: 'c6', title: 'Cluster 6: Cold shock regulon',
+                sub: '1차 마커 · 즉각 강한 유도',
+                color: '#22d3ee', triggerPhase: 'depart', x: 50, y: 39,
+                markers: ['cspA', 'cspB', 'deaD', 'rbfA'],
+                time: '10-50분',
+                desc: 'cspA/cspB/deaD/rbfA가 빠르게 상승해 온도 이탈 발생 여부를 표시'
+            },
+            {
+                id: 'c4', title: 'Cluster 4: 정보 전달 보충',
+                sub: '2차 보조 마커 · 중기 보상',
+                color: '#a78bfa', triggerPhase: 'highway', x: 25, y: 58,
+                markers: ['dnaG', 'murG', 'dbpA'],
+                time: '30-50분',
+                desc: 'DNA 복제·세포벽·리보솜 조립 기구를 보충해 저온 처리 효율 저하를 보상'
+            },
+            {
+                id: 'c5', title: 'Cluster 5: his 오페론',
+                sub: '후기 특이 보충 · 단독 급증',
+                color: '#22c55e', triggerPhase: 'lastmile', x: 75, y: 58,
+                markers: ['hisG', 'hisD', 'hisC', 'hisB'],
+                time: '90분',
+                desc: '저온 적응 후기에 히스티딘 생합성 오페론이 특이적으로 상승'
+            },
+            {
+                id: 'down', title: 'C1-C3 성장 대사 하향',
+                sub: '대사·수송·편모 활동 감소',
+                color: '#f59e0b', triggerPhase: 'highway', x: 50, y: 72,
+                markers: ['C1', 'C2', 'C3'],
+                time: '후기까지',
+                regulation: 'down',
+                desc: '일반 대사, 영양소 수송, 성장기 에너지 소비 활동이 단계적으로 축소'
+            },
+        ];
+
+        const PATHWAY_LINKS = [
+            { from: [50, 10], to: 'supercoil' },
+            { from: [50, 10], to: 'rpos' },
+            { from: 'supercoil', to: 'c6' },
+            { from: 'rpos', to: 'c6' },
+            { from: 'c6', to: 'c4' },
+            { from: 'c6', to: 'c5' },
+            { from: 'c4', to: 'down' },
+            { from: 'c5', to: 'down' },
+            { from: 'down', to: [50, 91] },
+        ];
+
+        // ── Simulation State ──
+        const path = document.getElementById('logicalRoute');
+        const pathLM = document.getElementById('logicalLastMile');
+        const passedRoute = document.getElementById('passedRoute');
+        const passedLastMile = document.getElementById('passedLastMile');
+        const truckEl = document.getElementById('truck');
+        const trafficLayer = document.getElementById('traffic-lights-layer');
+
+        const PATH_LEN = path.getTotalLength();
+        const LM_LEN = pathLM.getTotalLength();
+        const TOTAL_LEN = PATH_LEN + LM_LEN;
+
+        let isPlaying = false;
+        let animId = null;
+        let dist = 0;         // current distance (0 → TOTAL_LEN)
+        let elapsedMs = 0;         // simulated time in ms (1 sim-ms = 1s display)
+        let truckSpeed = 0;         // px/frame (internal)
+        let truckState = 'READY';
+        let simSpeed = 2;         // multiplier
+        let currentPhase = -1;
+        let tempHistory = [];
+        let cargoTemp = -18.0;     // °C
+
+        // Gene state: 0=idle, 1=active, 2=expressed, 3=stressed
+        const geneState = GENES.map(() => 0);
+        const geneLevel = GENES.map(() => 0); // 0–100%
+
+        function hexToRgbChannels(hex) {
+            const clean = hex.replace('#', '');
+            const normalized = clean.length === 3
+                ? clean.split('').map(ch => ch + ch).join('')
+                : clean;
+            const value = parseInt(normalized, 16);
+            return `${(value >> 16) & 255},${(value >> 8) & 255},${value & 255}`;
+        }
+
+        // ── Control points (highway) ──
+        const controlPoints = [
+            { id: 1, dist: PATH_LEN * 0.22, state: 'green', el: null, nextChange: 0, label: '북부간선 분기' },
+            { id: 2, dist: PATH_LEN * 0.52, state: 'red', el: null, nextChange: 0, label: '구리 TG' },
+            { id: 3, dist: PATH_LEN * 0.82, state: 'green', el: null, nextChange: 0, label: '남구리 진출' },
+        ];
+
+        // ── Phase determination ──
+        function getPhase(d) {
+            const pct = d / TOTAL_LEN;
+            if (d <= 0) return -1;       // READY
+            if (d < PATH_LEN * 0.08) return 0;        // load
+            if (d < PATH_LEN * 0.15) return 1;        // depart
+            if (d < PATH_LEN * 0.88) return 2;        // highway
+            if (d < PATH_LEN) return 3;        // exit
+            return 4;                                // lastmile
+        }
+
+        // ── Build phase timeline UI ──
+        (function buildPhaseUI() {
+            const container = document.getElementById('phaseTimeline');
+            container.innerHTML = '';
+            PHASES.forEach((ph, i) => {
+                const item = document.createElement('div');
+                item.className = 'phase-item';
+                item.id = 'phase-item-' + i;
+                item.innerHTML = `
+            <div class="phase-icon-wrap">
+                <div class="phase-icon idle" id="phase-icon-${i}">${ph.icon}</div>
+                <div class="phase-line" id="phase-line-${i}"></div>
+            </div>
+            <div class="phase-info">
+                <div class="phase-name">${ph.name}</div>
+                <div class="phase-desc">${ph.desc}</div>
+                <span class="phase-badge badge-idle" id="phase-badge-${i}">대기</span>
+            </div>`;
+                container.appendChild(item);
+            });
+        })();
+
+        // ── Build gene flowchart UI ──
+        function pathwayPoint(ref) {
+            if (Array.isArray(ref)) return { x: ref[0], y: ref[1] };
+            const gene = GENES.find(g => g.id === ref);
+            return { x: gene.x, y: gene.y };
+        }
+
+        function pathwayCurve(link) {
+            const from = pathwayPoint(link.from);
+            const to = pathwayPoint(link.to);
+            const midY = (from.y + to.y) / 2;
+            return `M ${from.x} ${from.y} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y}`;
+        }
+
+        (function buildGeneUI() {
+            const container = document.getElementById('geneFlowchart');
+            container.innerHTML = '';
+            const canvas = document.createElement('div');
+            canvas.className = 'pathway-canvas';
+            canvas.innerHTML = `
+        <svg class="pathway-links" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+                <marker id="pathwayArrow" markerWidth="4" markerHeight="4" refX="3.2" refY="2" orient="auto">
+                    <path d="M0,0 L4,2 L0,4 Z" fill="rgba(148,163,184,0.72)"/>
+                </marker>
+            </defs>
+            ${PATHWAY_LINKS.map((link, i) => {
+                const target = Array.isArray(link.to) ? 'output' : link.to;
+                const gene = GENES.find(g => g.id === target) || GENES.find(g => g.id === link.from);
+                const rgb = gene ? hexToRgbChannels(gene.color) : '148,163,184';
+                return `<path class="pathway-link" id="gene-link-${i}" data-target="${target}" style="--line-rgb:${rgb}" marker-end="url(#pathwayArrow)" d="${pathwayCurve(link)}"/>`;
+            }).join('')}
+        </svg>
+        <div class="pathway-gate"></div>
+        <div class="pathway-gate-label">Ward clustering · 6 functional modules</div>
+        <div class="pathway-stress">Cold Stress<span>37°C → 16°C</span></div>
+        <div class="pathway-output" id="gene-output">
+            <strong>온도 이탈 발현 패턴 판독</strong>
+            <span>C6 즉각 반응 + C4 중기 보충 + C5 후기 급증 + C1-C3 하향 비율로 노출 시간 추정</span>
+        </div>`;
+            container.appendChild(canvas);
+
+            GENES.forEach((g, i) => {
+                const node = document.createElement('div');
+                node.className = 'gene-node idle';
+                node.id = 'gene-node-' + i;
+                node.style.setProperty('--gene-rgb', hexToRgbChannels(g.color));
+                node.style.setProperty('--x', g.x + '%');
+                node.style.setProperty('--y', g.y + '%');
+                node.innerHTML = `
+            <div class="gene-header">
+                <div class="gene-main">
+                    <div class="gene-title" style="color:${g.color}">${g.title}</div>
+                    <div class="gene-sub">${g.sub}</div>
+                </div>
+                <div class="gene-level-ring">
+                    <span class="gene-level" id="gene-level-${i}">0%</span>
+                </div>
+            </div>
+            <div class="gene-desc">${g.desc}</div>
+            <div class="gene-chip-row">
+                ${g.markers.map(marker => `<span class="gene-chip">${marker}</span>`).join('')}
+            </div>
+            <div class="gene-meta">
+                <span>${g.time}</span>
+                <span>${g.regulation === 'down' ? 'down-regulated' : 'up-regulated'}</span>
+            </div>
+            <div class="gene-bar-wrap">
+                <div class="gene-bar-fill" id="gene-bar-${i}"></div>
+            </div>`;
+                canvas.appendChild(node);
+            });
+
+            const legend = document.createElement('div');
+            legend.className = 'pathway-legend';
+            legend.innerHTML = `
+        <span><i class="legend-swatch" style="--swatch:#22d3ee"></i>C6 1차 마커</span>
+        <span><i class="legend-swatch" style="--swatch:#a78bfa"></i>C4 보조 마커</span>
+        <span><i class="legend-swatch" style="--swatch:#22c55e"></i>C5 후기 마커</span>
+        <span><i class="legend-swatch" style="--swatch:#f59e0b"></i>C1-C3 하향</span>`;
+            container.appendChild(legend);
+        })();
+
+        // ── Build traffic control points ──
+        function initControlPoints() {
+            trafficLayer.innerHTML = '';
+            controlPoints.forEach(cp => {
+                cp.state = Math.random() > 0.4 ? 'green' : 'red';
+                cp.nextChange = performance.now() + 3000 + Math.random() * 4000;
+
+                const pt = path.getPointAtLength(cp.dist);
+                const ptN = path.getPointAtLength(cp.dist + 1);
+                const ang = Math.atan2(ptN.y - pt.y, ptN.x - pt.x) * (180 / Math.PI);
+                const off = 32;
+                const ox = -off * Math.sin(ang * Math.PI / 180);
+                const oy = off * Math.cos(ang * Math.PI / 180);
+
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('transform', `translate(${pt.x + ox},${pt.y + oy}) rotate(${ang})`);
+                g.innerHTML = `
+            <rect x="-2" y="0" width="4" height="22" fill="#475569"/>
+            <rect x="-13" y="-18" width="26" height="18" rx="3" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+            <text x="0" y="-22" fill="#94a3b8" font-size="7" text-anchor="middle" font-family="Outfit">${cp.label}</text>`;
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', '0'); circle.setAttribute('cy', '-9'); circle.setAttribute('r', '4');
+                g.appendChild(circle);
+                trafficLayer.appendChild(g);
+                cp.el = circle;
+                updateCPVisual(cp);
+            });
+        }
+
+        function updateCPVisual(cp) {
+            if (!cp.el) return;
+            if (cp.state === 'red') {
+                cp.el.setAttribute('fill', '#ef4444');
+                cp.el.setAttribute('filter', 'drop-shadow(0 0 5px rgba(239,68,68,0.9))');
+            } else {
+                cp.el.setAttribute('fill', '#22c55e');
+                cp.el.setAttribute('filter', 'drop-shadow(0 0 5px rgba(34,197,94,0.9))');
+            }
+        }
+
+        // ── Phase update ──
+        function updatePhases(newPhase) {
+            if (newPhase === currentPhase) return;
+            const prev = currentPhase;
+            currentPhase = newPhase;
+
+            PHASES.forEach((ph, i) => {
+                const icon = document.getElementById('phase-icon-' + i);
+                const badge = document.getElementById('phase-badge-' + i);
+                const line = document.getElementById('phase-line-' + i);
+                if (i < newPhase) {
+                    icon.className = 'phase-icon done';
+                    badge.className = 'phase-badge badge-done';
+                    badge.textContent = '완료 ✓';
+                    if (line) { line.className = 'phase-line done'; }
+                } else if (i === newPhase) {
+                    icon.className = 'phase-icon active';
+                    badge.className = 'phase-badge badge-active';
+                    badge.textContent = '진행 중...';
+                    if (line) { line.className = 'phase-line active'; }
+                } else {
+                    icon.className = 'phase-icon idle';
+                    badge.className = 'phase-badge badge-idle';
+                    badge.textContent = '대기';
+                    if (line) { line.className = 'phase-line'; }
+                }
+            });
+
+            // Log phase transitions
+            const phaseNames = ['화물 적재 시작', '고속도로 진입', '고속 주행 구간', 'IC 진출 구간', '라스트 마일 배달'];
+            if (newPhase >= 0 && newPhase < phaseNames.length) {
+                addLog(phaseNames[newPhase], newPhase === 4 ? 'warn' : 'cold');
+            }
+        }
+
+        // ── Gene state update ──
+        function updateGenes(phase, temp) {
+            const phaseIdx = phase;
+            const tempDriftBoost = temp > -14 ? Math.min(28, (temp + 14) * 9) : 0;
+
+            GENES.forEach((g, i) => {
+                const trigIdx = PHASES.findIndex(p => p.id === g.triggerPhase);
+                let targetLevel = 0;
+
+                if (phaseIdx >= trigIdx) {
+                    const step = Math.max(1, phaseIdx - trigIdx + 1);
+                    const jitter = Math.random() * 4;
+                    if (g.id === 'supercoil') targetLevel = 62 + step * 7 + jitter;
+                    else if (g.id === 'rpos') targetLevel = 54 + step * 9 + jitter;
+                    else if (g.id === 'c6') targetLevel = 72 + step * 8 + tempDriftBoost + jitter;
+                    else if (g.id === 'c4') targetLevel = 42 + step * 18 + jitter;
+                    else if (g.id === 'c5') targetLevel = phaseIdx >= 4 ? 70 + tempDriftBoost * 0.45 + jitter : 18 + step * 4;
+                    else if (g.id === 'down') targetLevel = 34 + phaseIdx * 12 + tempDriftBoost * 0.35 + jitter;
+                    targetLevel = Math.min(100, targetLevel);
+                }
+
+                // Animate level
+                geneLevel[i] += (targetLevel - geneLevel[i]) * 0.04;
+                const level = Math.max(0, Math.min(100, geneLevel[i]));
+                const bar = document.getElementById('gene-bar-' + i);
+                if (bar) bar.style.width = level.toFixed(1) + '%';
+                const levelEl = document.getElementById('gene-level-' + i);
+                if (levelEl) levelEl.textContent = Math.round(level) + '%';
+
+                const node = document.getElementById('gene-node-' + i);
+                if (!node) return;
+                node.style.setProperty('--level', level.toFixed(1) + '%');
+                node.style.setProperty('--glow-alpha', (0.08 + level / 100 * 0.30).toFixed(3));
+                node.setAttribute('aria-label', `${g.title} 발현 지표 ${Math.round(level)}%`);
+
+                let stateClass = 'idle';
+                if (level > 5) {
+                    if (g.regulation === 'down') stateClass = 'suppressed';
+                    else if (g.id === 'c5' && level > 60) stateClass = 'late';
+                    else if (level > 60) stateClass = 'expressed';
+                    else stateClass = 'active';
+                }
+                node.className = 'gene-node ' + stateClass;
+            });
+
+            PATHWAY_LINKS.forEach((link, i) => {
+                const el = document.getElementById('gene-link-' + i);
+                if (!el) return;
+                const targetId = Array.isArray(link.to) ? link.from : link.to;
+                const targetIdx = GENES.findIndex(g => g.id === targetId);
+                const active = targetIdx >= 0 && geneLevel[targetIdx] > 18;
+                el.classList.toggle('active', active);
+            });
+
+            const outputEl = document.getElementById('gene-output');
+            const c6Level = geneLevel[GENES.findIndex(g => g.id === 'c6')] || 0;
+            const c4Level = geneLevel[GENES.findIndex(g => g.id === 'c4')] || 0;
+            const c5Level = geneLevel[GENES.findIndex(g => g.id === 'c5')] || 0;
+            if (outputEl) {
+                outputEl.style.borderColor = c6Level > 55
+                    ? 'rgba(34,197,94,0.78)'
+                    : 'rgba(56,189,248,0.28)';
+                const label = c5Level > 45 ? '후기 적응/노출 지속 신호'
+                    : c4Level > 45 ? '중기 보상 반응 진행'
+                        : c6Level > 45 ? '초기 저온 이탈 신호'
+                            : '온도 이탈 발현 패턴 판독';
+                outputEl.querySelector('strong').textContent = label;
+            }
+
+            const activeCount = geneLevel.filter(l => l > 30).length;
+            document.getElementById('kpiGene').textContent = activeCount + ' / ' + GENES.length;
+            const kpiGeneEl = document.getElementById('kpiGene');
+            kpiGeneEl.className = 'kpi-value ' + (temp > -12 ? 'danger' : activeCount >= 4 ? 'ok' : '');
+        }
+
+        // ── Temperature simulation ──
+        function updateTemperature(phase, dt) {
+            // Base temp target per phase
+            const targets = [-18.0, -17.5, -16.8, -14.5, -12.0];
+            const target = targets[Math.max(0, Math.min(phase, 4))];
+            const drift = (Math.random() - 0.5) * 0.08;
+            cargoTemp += (target - cargoTemp) * 0.005 + drift;
+            cargoTemp = Math.max(-24, Math.min(8, cargoTemp));
+
+            // Push to history
+            tempHistory.push(cargoTemp);
+            if (tempHistory.length > 80) tempHistory.shift();
+
+            // Display
+            const tempEl = document.getElementById('tempDisplay');
+            const kpiTempEl = document.getElementById('kpiTemp');
+            const formatted = cargoTemp.toFixed(1) + '°C';
+            tempEl.textContent = formatted;
+            kpiTempEl.textContent = cargoTemp.toFixed(1);
+
+            // Color coding
+            let cls = '';
+            if (cargoTemp > -5) { cls = 'danger'; }
+            else if (cargoTemp > -12) { cls = 'warn'; }
+            else { cls = 'ok'; }
+            kpiTempEl.className = 'kpi-value ' + cls;
+
+            // Gauge: map -25..+5 → 0..100%
+            const pct = ((cargoTemp - (-25)) / 30) * 100;
+            const fill = document.getElementById('tempGaugeFill');
+            fill.style.width = pct.toFixed(1) + '%';
+            if (cargoTemp > -5) fill.style.background = 'linear-gradient(90deg,#ef4444,#f87171)';
+            else if (cargoTemp > -12) fill.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)';
+            else fill.style.background = 'linear-gradient(90deg,#0ea5e9,#38bdf8)';
+
+            // Temp chart
+            drawTempChart();
+
+            // Alerts
+            if (cargoTemp > -10 && Math.random() < 0.01) {
+                addLog(`⚠️ 온도 이탈 경고: ${cargoTemp.toFixed(1)}°C (기준: -18°C)`, 'danger');
+            }
+        }
+
+        function drawTempChart() {
+            const W = 340, H = 60;
+            const minT = -22, maxT = 0;
+            const line = document.getElementById('tempChartLine');
+            const area = document.getElementById('tempChartArea');
+            if (!line || tempHistory.length < 2) return;
+
+            const pts = tempHistory.map((t, i) => {
+                const x = 4 + (i / (tempHistory.length - 1)) * (W - 8);
+                const y = H - 8 - ((t - minT) / (maxT - minT)) * (H - 16);
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            });
+            line.setAttribute('points', pts.join(' '));
+
+            // Area path
+            const last = tempHistory.length - 1;
+            const x0 = 4, xN = 4 + (W - 8);
+            const apts = tempHistory.map((t, i) => {
+                const x = 4 + (i / last) * (W - 8);
+                const y = H - 8 - ((t - minT) / (maxT - minT)) * (H - 16);
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            });
+            area.setAttribute('d', `M ${x0},${H - 8} L ${apts.join(' L ')} L ${xN},${H - 8} Z`);
+        }
+
+        // ── Log system ──
+        let logTime = 0;
+        function addLog(msg, type = 'cold') {
+            logTime = elapsedMs;
+            const mm = String(Math.floor(logTime / 60000)).padStart(2, '0');
+            const ss = String(Math.floor((logTime % 60000) / 1000)).padStart(2, '0');
+            const list = document.getElementById('logList');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${mm}:${ss}</span><span class="log-msg ${type}">${msg}</span>`;
+            list.insertBefore(entry, list.firstChild);
+            // Max 40 entries
+            while (list.children.length > 40) list.removeChild(list.lastChild);
+        }
+
+        // ── KPI / UI updates ──
+        function updateKPIs(phase, speedKmh) {
+            const mm = String(Math.floor(elapsedMs / 60000)).padStart(2, '0');
+            const ss = String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
+            document.getElementById('kpiTime').textContent = mm + ':' + ss;
+            document.getElementById('kpiSpeed').textContent = Math.round(speedKmh);
+            const pct = Math.min(100, (dist / TOTAL_LEN) * 100);
+            document.getElementById('kpiProgress').textContent = pct.toFixed(0);
+
+            const phaseLabels = ['화물 적재', '고속 진입', '고속 주행', 'IC 진출', '라스트 마일', '배달 완료'];
+            const statusColors = ['ok', '', '', 'warn', 'ok', 'ok'];
+            const statusEl = document.getElementById('kpiStatus');
+            statusEl.textContent = phaseLabels[Math.min(phase, 5)] || '대기 중';
+            if (truckState === 'STOPPED') statusEl.textContent = '요금소/정체 🔴';
+            if (truckState === 'ARRIVED') statusEl.textContent = '배달 완료 🏁';
+        }
+
+        // ── Render truck ──
+        function renderTruck(d) {
+            let pt, ptN, onLastMile = false;
+            if (d <= PATH_LEN) {
+                const safeD = Math.min(d, PATH_LEN);
+                pt = path.getPointAtLength(safeD);
+                ptN = path.getPointAtLength(Math.min(safeD + 1, PATH_LEN));
+            } else {
+                const lmD = d - PATH_LEN;
+                const safeLM = Math.min(lmD, LM_LEN);
+                pt = pathLM.getPointAtLength(safeLM);
+                ptN = pathLM.getPointAtLength(Math.min(safeLM + 1, LM_LEN));
+                onLastMile = true;
+            }
+            const ang = Math.atan2(ptN.y - pt.y, ptN.x - pt.x) * (180 / Math.PI);
+            truckEl.setAttribute('transform', `translate(${pt.x},${pt.y}) rotate(${ang})`);
+
+            // Update route overlays
+            if (d <= PATH_LEN) {
+                passedRoute.setAttribute('stroke-dasharray', `${d},${PATH_LEN}`);
+                passedLastMile.setAttribute('stroke-dasharray', `0,${LM_LEN}`);
+            } else {
+                passedRoute.setAttribute('stroke-dasharray', `${PATH_LEN},${PATH_LEN}`);
+                const lmD = d - PATH_LEN;
+                passedLastMile.setAttribute('stroke-dasharray', `${lmD},${LM_LEN}`);
+            }
+        }
+
+        // ── Main simulation loop ──
+        let lastTS = null;
+        function simLoop(ts) {
+            if (!isPlaying) return;
+            const rawDt = lastTS ? Math.min(ts - lastTS, 50) : 16;
+            lastTS = ts;
+            const dt = rawDt * simSpeed;
+
+            // Advance time
+            elapsedMs += rawDt * simSpeed * 0.5;
+
+            // Update control point lights
+            controlPoints.forEach(cp => {
+                if (ts > cp.nextChange) {
+                    cp.state = cp.state === 'green' ? 'red' : 'green';
+                    updateCPVisual(cp);
+                    cp.nextChange = ts + 2500 + Math.random() * 4000;
+                }
+            });
+
+            // Determine phase
+            const phase = getPhase(dist);
+            updatePhases(Math.max(phase, 0));
+
+            // Speed control: check control points (highway only)
+            let brake = false;
+            if (dist < PATH_LEN) {
+                for (const cp of controlPoints) {
+                    const d2cp = cp.dist - dist;
+                    if (d2cp > 0 && d2cp < 50 && cp.state === 'red') {
+                        brake = true; break;
+                    }
+                }
+            }
+
+            // Target speed (internal units/frame)
+            let targetSpeed;
+            if (phase === 0) targetSpeed = 0.6;       // loading slow
+            else if (phase === 1) targetSpeed = 1.2;  // entering
+            else if (phase === 2) targetSpeed = 2.5;  // highway
+            else if (phase === 3) targetSpeed = 1.5;  // exit
+            else targetSpeed = 0.9;                    // last mile
+
+            if (brake) targetSpeed = 0;
+
+            // Random congestion
+            if (!brake && Math.random() < 0.002) { targetSpeed *= 0.3; }
+
+            truckSpeed += (targetSpeed - truckSpeed) * 0.06;
+
+            // Move truck
+            dist += truckSpeed * (dt / 16);
+            dist = Math.min(dist, TOTAL_LEN);
+
+            // Speed in km/h (approximate display)
+            const kmh = truckSpeed * (phase === 2 ? 38 : phase === 4 ? 16 : 24);
+
+            renderTruck(dist);
+            updateTemperature(phase, dt);
+            updateGenes(phase, cargoTemp);
+            updateKPIs(phase, kmh);
+
+            if (truckState !== 'STOPPED' && brake) {
+                truckState = 'STOPPED';
+                addLog('🔴 요금소/정체 구간 감속 정지', 'warn');
+            } else if (truckState === 'STOPPED' && !brake) {
+                truckState = 'DRIVING';
+                addLog('🟢 주행 재개', 'ok');
+            }
+
+            // Arrival check
+            if (dist >= TOTAL_LEN) {
+                isPlaying = false;
+                truckState = 'ARRIVED';
+                updatePhases(4);
+                document.getElementById('kpiStatus').textContent = '배달 완료 🏁';
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                addLog('🏁 배달 완료! 화물 하역 성공. 저온 체인 유지됨.', 'ok');
+                return;
+            }
+
+            animId = requestAnimationFrame(simLoop);
+        }
+
+        // ── Controls ──
+        document.getElementById('startBtn').addEventListener('click', () => {
+            if (dist >= TOTAL_LEN) return;
+            isPlaying = true;
+            lastTS = null;
+            truckState = 'DRIVING';
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            addLog('🚛 배송 시작! 냉동 화물 출발.', 'cold');
+            animId = requestAnimationFrame(simLoop);
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            isPlaying = false;
+            cancelAnimationFrame(animId);
+            truckState = 'PAUSED';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            addLog('⏸ 시뮬레이션 일시정지', 'warn');
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            isPlaying = false;
+            cancelAnimationFrame(animId);
+            dist = 0; elapsedMs = 0; truckSpeed = 0;
+            cargoTemp = -18.0; tempHistory = [];
+            truckState = 'READY'; currentPhase = -1;
+            lastTS = null;
+            for (let i = 0; i < geneLevel.length; i++) geneLevel[i] = 0;
+
+            renderTruck(0);
+            passedRoute.setAttribute('stroke-dasharray', '0,' + PATH_LEN);
+            passedLastMile.setAttribute('stroke-dasharray', '0,' + LM_LEN);
+            updatePhases(-1);
+            updateGenes(-1, -18);
+            updateKPIs(0, 0);
+            updateTemperature(0, 0);
+
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('kpiStatus').textContent = '대기 중';
+            document.getElementById('logList').innerHTML =
+                '<div class="log-entry"><span class="log-time">00:00</span><span class="log-msg cold">시스템 초기화 완료. 냉동 화물 적재 준비 중...</span></div>';
+            initControlPoints();
+        });
+
+        document.getElementById('simSpeedSlider').addEventListener('input', function () {
+            simSpeed = parseFloat(this.value);
+            document.getElementById('speedMult').textContent = '×' + simSpeed;
+        });
+
+        // ── Initialize ──
+        initControlPoints();
+        renderTruck(0);
+        passedRoute.setAttribute('stroke-dasharray', '0,' + PATH_LEN);
+        passedLastMile.setAttribute('stroke-dasharray', '0,' + LM_LEN);
+        updatePhases(-1);
+        updateKPIs(0, 0);
+        updateTemperature(0, 0);
+    </script>
+</body>
+
+</html>
